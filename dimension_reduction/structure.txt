@@ -1,0 +1,19 @@
+
+dimension_reduction/
+L __init__.py
+L main.py
+L cost_functions.py
+L parameter_finder.py
+L reductions.py
+L plotting
+	L __init__.py
+
+
+./__init__.py
+./main.py
+./cost_functions.py
+./parameter_finder.py
+./reductions.py
+./plotting/*
+./structure.txt
+
