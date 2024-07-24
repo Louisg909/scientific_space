@@ -1,5 +1,14 @@
+
+import plotly.express as px
+import pandas as pd
+
 import plotly.graph_objects as go
 
+
+# TODO
+"""
+- Check visualisation
+"""
 
 def plot(titles, x_vals, y_vals, categories):
     # Assign a unique color to each category
@@ -34,27 +43,19 @@ def plot(titles, x_vals, y_vals, categories):
 
 
 
-#class Article:
-#    def __init__(self, title, x, y):
-#        self.title = title
-#        self.x = x
-#        self.y = y
-#
-## Sample data
-#articles = [
-#    Article("Article 1", 1, 2),
-#    Article("Article 2", 3, 4),
-#    Article("Article 3", 5, 1),
-#    Article("Article 4", 7, 6),
-#    Article("Article 5", 4, 5)
-#]
-#
-## Extracting data into lists for plotting
-#titles = [article.title for article in articles]
-#x_values = [article.x for article in articles]
-#y_values = [article.y for article in articles]
-#
-#plot(titles, x_values, y_values)
+def visualize(dt):
+    plot_data(dt.reduced_data['rand'], dt.categories, dt.titles, "Random Visualization")
+    plot_data(dt.reduced_data['PCA'], dt.categories, dt.titles, "PCA Visualization")
+    plot_data(dt.reduced_data['tsne'], dt.categories, dt.titles, "t-SNE Visualization")
+    plot_data(dt.reduced_data['pca tsne'], dt.categories, dt.titles, "t-SNE on PCA Visualization")
+    plot_data(dt.reduced_data['iso']isomap_data, dt.categories, dt.titles, "Isomap Visualization")
+    plot_data(dt.reduced_data['pca iso'], dt.categories, dt.titles, "Isomap on PCA Visualization")
+    plot_data(dt.reduced_data['hes'], dt.categories, dt.titles, "Hessian Eigenmap Visualization")
+    plot_data(dt.reduced_data['pca hes'], dt.categories, dt.titles, "Hessian Eigenmap on PCA Visualization")
 
-
-
+def plot_data(data, labels, titles, title):
+    df = pd.DataFrame(data, columns=['x', 'y'])
+    df['category'] = labels
+    df['title'] = titles
+    fig = px.scatter(df, x='x', y='y', color='category', hover_data=['title'], title=title)
+    fig.show()

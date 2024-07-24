@@ -1,22 +1,11 @@
+import sqlite3
 
-from commands import grab
-
-"""
-
-def grab(table='papers', select='*'):
-
-CREATE TABLE citations (
-    parent_id INT,
-    child_id INT,
-    PRIMARY KEY (parent_id, child_id),
-    FOREIGN KEY (parent_id) REFERENCES papers(node_id),
-    FOREIGN KEY (child_id) REFERENCES papers(node_id)
-);
-
-"""
+import commands as pm
 
 def get_parents(paper_tuple):
     child_id = paper_tuple[0]
+
+
     conn = sqlite3.connect(database_path)
     cursor = conn.cursor()
     
@@ -27,7 +16,7 @@ def get_parents(paper_tuple):
     conn.close()
     
     parent_ids = [parent_id[0] for parent_id in parent_ids]
-    return [grab(where=[('id',),(child_id,)]) for child_id in child_ids]
+    return [pm.grab(where=[('id',),(child_id,)]) for child_id in child_ids]
 
 def get_children(paper_tuple):
     parent_id = paper_tuple[0]
@@ -42,5 +31,3 @@ def get_children(paper_tuple):
     
     child_ids = [child_id[0] for child_id in child_ids]
     return [grab(where=[('id',),(child_id,)]) for child_id in child_ids]
-
-
