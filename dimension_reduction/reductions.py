@@ -60,8 +60,8 @@ def apply_random(data):
     Applies a random projection of the data.
     
     Parameters:
-    dt : object
-        Takes the simulation state as an input.
+    data : ndarray
+        Takes the data as an input.
     """
     axes = np.random.choice(data.shape[1], size=2, replace=False)
     return data[:, axes]
@@ -69,49 +69,49 @@ def apply_random(data):
 def apply_pca(data):
     """
     Applies PCA on the data to reduce it to 2 dimensions.
-    
+
     Parameters:
-    t : object
-        Takes the simulation state as an input.
+    data : ndarray
+        Takes the data as an input.
     """
     pca = PCA(n_components=2).fit_transform(data)
     return pca
 
 def apply_tsne(data, perplexity=30.0):
-    learning_rate='auto'
-    n_iter=1000
+    max_iter=1000
     """
     Applies t-SNE on both the data and npca to reduce them to 2 dimensions.
     
     Parameters:
-    dt : object
-        Takes the simulation state as an input.
-    n_components : int, optional, default=2
-        Dimension of the embedded space.
+    data : ndarray
+        Takes the data as an input.
     perplexity : float, optional, default=30.0
         The perplexity is related to the number of nearest neighbors that is used in other manifold learning algorithms.
-    learning_rate : float or 'auto', optional, default='auto'
-        The learning rate for t-SNE.
-    n_iter : int, optional, default=1000
-        Maximum number of iterations for the optimization.
     """
-    return TSNE(n_components=2, perplexity=perplexity, learning_rate=learning_rate, n_iter=n_iter).fit_transform(data)
+    return TSNE(n_components=2, perplexity=perplexity, learning_rate='auto', max_iter=max_iter).fit_transform(data)
 
 def apply_isomap(data, n_neighbors=5):
     """
     Applies Isomap on both the data and npca to reduce them to 2 dimensions.
     
     Parameters:
-    dt : object
-        Takes the simulation state as an input.
-    n_components : int, optional, default=2
-        Number of coordinates for the manifold.
+    data : ndarray
+        Takes the data as an input.
     n_neighbors : int, optional, default=5
         Number of neighbors to consider for each point.
     """
     return Isomap(n_components=2, n_neighbors=int(n_neighbors)).fit_transform(data)
 
 def apply_hessian(data, n_neighbors=10):
+    """
+    Applies Isomap on both the data and npca to reduce them to 2 dimensions.
+    
+    Parameters:
+    data : ndarray
+        Takes the data as an input.
+    n_neighbors : int, optional, default=10
+        Number of neighbors to consider for each point.
+    """
     n_neighbors=int(n_neighbors)
     # Step 1: Compute the k-nearest neighbors
     tree = KDTree(data)

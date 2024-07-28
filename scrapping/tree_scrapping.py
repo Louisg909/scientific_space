@@ -4,6 +4,7 @@ import sqlite3
 
 import commands as pm
 
+#TODO - add scraper that takes depth and number of starting papers - randomly scrapes for those starting papers and then does the depth scrape for each of those papers.
 
 sleep_timer = 0.5 # 1 second
 
