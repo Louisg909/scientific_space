@@ -2,6 +2,17 @@
 
 import numpy as np
 
+
+def func(data, a, b, c, d, e, f, g, h):
+    diff = [(data[2] - (a/(n[0]*n[1]) + 1 / (b*n[0]+c) + np.exp(-d*abs(e*n[0]+f)+g)+h))**2 for n in data]
+    return sum(diff)
+
+if __name__ == '__main__':
+    data = 
+    params, _ = param_search(func, lambda x: x, 
+
+
+
 def param_search(test_func, cost_func, data, n_tests=10, initial_lr=0.01, tolerance=1e-6, precision=1e-4, max_iter=1000, **ranges):
     learning_rate = initial_lr
 

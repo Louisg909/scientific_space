@@ -354,6 +354,6 @@ def arXiv(query, limit=10):
 
 
 if __name__ == '__main__':
-    data = arXiv('all')
+    data = semantic_scholar('all')
     print(data)
 
