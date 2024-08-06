@@ -18,11 +18,11 @@ def calculate_weights(p, v=None):
     w_hat (np.ndarray): Normalized weights.
     c (np.ndarray): Contribution vector.
     """
-    if v is None:
+    p = np.array(p, dtype=np.float64).reshape(-1, 1)
+
+    if v is None or len(v) == 0:
         return None, p
 
-    # Convert p and v to float64 for precision and to avoid casting issues
-    p = np.array(p, dtype=np.float64).reshape(-1, 1)
     v = np.array(v, dtype=np.float64)
     
     # Number of parent vectors
@@ -48,6 +48,15 @@ def calculate_weights(p, v=None):
     c = p - contribution_sum
     
     return w_hat, c
+
+if __name__ == '__main__':
+    # Example usage:
+    p = [1, 2, 3]
+    v = []  # Empty list
+    
+    w_hat, c = calculate_weights(p, v)
+    print("Normalized weights:", w_hat)
+    print("Contribution vector:", c)
 
 if __name__ == '__main__':
     # Example usage:
