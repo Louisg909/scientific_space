@@ -8,8 +8,8 @@ def func(data, a, b, c, d, e, f, g, h):
     return sum(diff)
 
 if __name__ == '__main__':
-    data = 
-    params, _ = param_search(func, lambda x: x, 
+    data = 2
+    params, _ = param_search(func, lambda x: x, 2)
 
 
 

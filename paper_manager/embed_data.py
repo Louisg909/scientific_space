@@ -1,25 +1,27 @@
 import numpy as np
 import torch
 import struct
-from .commands import edit
 
 
 def update_scibert(table='papers'):
+    from .commands import db
     bert = SciBERT()
-    edit(table, bert.add_embedding, lambda paper : paper[6]==b'')
+    with db() as d_b:
+        d_b.edit(table, bert.add_embedding, lambda paper : paper[6]==b'')
 
 class SciBERT:
-    def __init__(self):
+    def __init__(self, reduction_model=None):
         from transformers import AutoTokenizer, AutoModel
         # Load SciBERT model and tokenizer
         self.tokenizer = AutoTokenizer.from_pretrained("allenai/scibert_scivocab_uncased")
         self.model = AutoModel.from_pretrained("allenai/scibert_scivocab_uncased")
+        self.reduction_model = None # TODO - implement way to give a basic reduction model that all the embedded vectors will be reduced by.
 
     def embed(self, text: str) -> torch.Tensor:
         tokenized = self.tokenizer(text, return_tensors="pt", padding=True, truncation=True, max_length=512)
         with torch.no_grad():
             outputs = self.model(**tokenized)
-        return outputs.last_hidden_state[:, 0, :]
+        return outputs.last_hidden_state[:, 0, :].squeeze().numpy() # squeeze removes batch dimension
     
     def add_embedding(self, paper_tup):
         text = f'{paper_tup[1]}: \n{paper_tup[2]}'
@@ -75,10 +77,10 @@ if __name__=='__main__':
     # Example tensor
     tensor = torch.rand(1, 768)
     print(tensor)
-    binary = translate_embedding(tensor)
+    binary = translate(tensor)
     print(binary)
     print(type(binary))
-    tensor2 = translate_embedding(binary)
+    tensor2 = translate(binary)
     print(tensor2)
     
 

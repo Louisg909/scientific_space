@@ -1,7 +1,7 @@
 from .commands import db
-import tree_commands as tree
+#import tree_commands as tree
 from .embed_data import translate, SciBERT, update_scibert
-from .setup_database import setup_database
+#from .setup_database import setup_database
 
 __doc__ = """
 
