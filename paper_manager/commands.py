@@ -2,6 +2,8 @@
 import sqlite3
 import traceback
 
+# TODO add dictionary capability to all functions
+
 
 class db:
     def __init__(self):
@@ -84,16 +86,23 @@ class db:
         for query in table_creation_queries:
             self.c.execute(query)
 
-    def _tuple_to_dict(self, row, table='papers'):
-        from .embed_data import translate
+    def _get_keys(self, table):
+        if table == 'authors':
+            return  ['id', 'name']
+        if table == 'author_papers':
+            return ['id', 'title', 'summary', 'year', 'author_id', 'embedding']
+        if table == 'paper_references':
+            return ['parent_id', 'child_id', 'weighting']
         if table == 'citation_papers':
-            return {}
-        elif table == 'paper_references': # idk when this would be used, but might as well throw it in now for ease.
-            return {}
-        return {'id': row[0], 'title': row[1], 'summary': row[2], 'author': row[3], 'year': row[4], 'category': row[5], 'embedding': translate(row[6])}
+            return ['id', 'title', 'summary', 'author', 'year', 'category', 'embedding', 'cited_by', 'cites', 'c_vector', 'c_mag']
+        return ['id', 'title', 'summary', 'author', 'year', 'category', 'embedding']
 
-    def _dict_to_tuple(dictionary):
-        return
+
+    def _tuple_to_dict(self, row, table='papers'):
+        return dict(zip(self._get_keys(table), row))
+
+    def _dict_to_tuple(self, dictionary, table='papers'):
+        return tuple(dictionary[key] for key in self._get_keys(table))
 
 
     def _get_columns_for_table(self, table):
@@ -129,7 +138,7 @@ class db:
         else:
             # If the format is 'tuple', we assume the columns need to be specified
             # The caller needs to provide the correct columns in the right order
-            columns = self._get_columns_for_table(table)  # You need to implement this method to fetch the table's column names
+            columns = self._get_columns_for_table(table)
             values = row
     
         # Create placeholders for the SQL queries
@@ -182,7 +191,7 @@ class db:
             if format=='tuple':
                 yield row
             if format=='dict':
-                yield self._tuple_to_dict(row)
+                yield self._tuple_to_dict(row, table=table)
 
     def grab(self, table='papers', select='*', where=None):
         """
@@ -224,6 +233,8 @@ class db:
     
         column_names = [description[0] for description in self.c.description]
     
+        done = 0
+        print()
         for row in rows:
             new_row = function(row)
     
@@ -234,6 +245,8 @@ class db:
                 SET {set_clause}
                 WHERE {column_names[0]} = ?
             ''', new_row[1:] + (row[0],))
+            done += 1
+            print('\rCompleted:\t' + str(done))
 
     def show_tables(self):
         """

@@ -1,20 +1,8 @@
-
-
 import numpy as np
 
-
-def func(data, a, b, c, d, e, f, g, h):
-    diff = [(data[2] - (a/(n[0]*n[1]) + 1 / (b*n[0]+c) + np.exp(-d*abs(e*n[0]+f)+g)+h))**2 for n in data]
-    return sum(diff)
-
-if __name__ == '__main__':
-    data = 2
-    params, _ = param_search(func, lambda x: x, 2)
-
-
-
-def param_search(test_func, cost_func, data, n_tests=10, initial_lr=0.01, tolerance=1e-6, precision=1e-4, max_iter=1000, **ranges):
+def param_search(test_func, cost_func, data, n_tests=10, initial_lr=0.01, tolerance=1e-6, precision=1e-4, max_iter=1000, beta=0.9, **ranges):
     learning_rate = initial_lr
+    momentum = {key: 0 for key in ranges.keys()}
 
     parameters = {key: (value[0] + value[1]) / 2 for key, value in ranges.items()}
 
@@ -56,7 +44,9 @@ def param_search(test_func, cost_func, data, n_tests=10, initial_lr=0.01, tolera
         
         prev_parameters = parameters.copy()
         for key in parameters:
-            parameters[key] -= learning_rate * gradients[key]
+            momentum[key] = beta * momentum[key] + (1 - beta) * gradients[key]
+            parameters[key] -= learning_rate * momentum[key]
+        
         parameters = clip_param(parameters)
         validate_parameters(parameters)
         
@@ -79,8 +69,38 @@ def param_search(test_func, cost_func, data, n_tests=10, initial_lr=0.01, tolera
         
         cost = new_cost
 
-    print(itters)
+    print(f"Iterations: {itters}")
     parameters = round_parameters(parameters, precision)
     final_reduced_data = test_func(data, **parameters)
     return parameters, final_reduced_data
+
+
+
+import numpy as np
+
+def dummy_test_func(data, a, b):
+    # A simple quadratic function for testing
+    return data * (a ** 2) + b
+
+def dummy_cost_func(original, modified):
+    # A simple mean squared error for testing
+    return np.mean((original - modified) ** 2)
+
+if __name__ == '__main__':
+    # Create some synthetic data
+    data = np.linspace(0, 10, 100)
+
+    # Define the ranges for 'a' and 'b'
+    ranges = {
+        'a': (0.1, 2.0),
+        'b': (-5.0, 5.0)
+    }
+
+    # Run the parameter search
+    params, reduced_data = param_search(dummy_test_func, dummy_cost_func, data, n_tests=10, initial_lr=0.1, tolerance=1e-6, precision=1e-4, max_iter=1000, **ranges)
+    
+    print("Optimized Parameters:", params)
+    print("First 10 of Reduced Data:", reduced_data[:10])
+
+
 

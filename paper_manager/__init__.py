@@ -1,7 +1,6 @@
 from .commands import db
 #import tree_commands as tree
 from .embed_data import translate, SciBERT, update_scibert
-#from .setup_database import setup_database
 
 __doc__ = """
 
@@ -9,7 +8,7 @@ __doc__ = """
 with pm.db() as db:
     db.insert(table='papers', *data:tuple)
     
-    db.access(table='papers', select='*', limit=None)
+    db.access(self, table='papers', select='*', limit=None, format='tuple') -> yields 
     
     db.edit(table, function, condition=None)
     

@@ -12,37 +12,46 @@ from scrapping import author_scrape
 
 
 
-bert = pm.SciBERT()
+# ======================= AUTHOR WORK OVER TIME ======================== #
 
-author = 'Albert Einstein'
+#bert = pm.SciBERT()
+#
+#author = 'Albert Einstein'
+#
+#years = []
+#embeddings = []
+#
+#with pm.db() as db:
+#    author_id = db.insert(table='authors', row={'name': author}, format='dict') # gets existing id if the author already exists.
+#    for paper in author_scrape.scrape_author(author):
+#        embedding = bert.embed(paper['title'] + ': ' + paper['summary'])
+#        db.insert(table='author_papers', row={'author_id': author_id, 'title': paper['title'], 'summary': paper['summary'], 'year': paper['year'], 'embedding': pm.translate(embedding)}, format='dict')
+#        years.append(paper['year'])
+#        embeddings.append(embedding)
+#
+#
+#
+#dimensions = mal.split_embeddings(embeddings)
+#
+#corr, cov = an.covariance(years, dimensions, embeddings=False)
+#
+#high_corr_index = sorted(range(len(corr)), key=lambda i : dimensions[i], reverse=True)[:3]
+#high_cov_index =  sorted(range(len(cov)), key=lambda i : dimensions[i], reverse=True)[:3]
+#
+#print(f'High Correlation:\t{high_corr_index}\nHigh Covarience:\t{high_cov_index}')
+#
+#an.plot_dimensions(years, dimensions, high_corr_index + high_cov_index, embeddings=False)
 
-years = []
-embeddings = []
-
-with pm.db() as db:
-    author_id = db.insert(table='authors', row={'name': author}, format='dict') # gets existing id if the author already exists.
-    for paper in author_scrape.scrape_author(author):
-        embedding = bert.embed(paper['title'] + ': ' + paper['summary'])
-        db.insert(table='author_papers', row={'author_id': author_id, 'title': paper['title'], 'summary': paper['summary'], 'year': paper['year'], 'embedding': pm.translate(embedding)}, format='dict')
-        years.append(paper['year'])
-        embeddings.append(embedding)
-
-
-
-dimensions = mal.split_embeddings(embeddings)
-
-corr, cov = an.covariance(years, dimensions, embeddings=False)
-
-high_corr_index = sorted(range(len(corr)), key=lambda i : dimensions[i], reverse=True)[:3]
-high_cov_index =  sorted(range(len(cov)), key=lambda i : dimensions[i], reverse=True)[:3]
-
-print(f'High Correlation:\t{high_corr_index}\nHigh Covarience:\t{high_cov_index}')
-
-an.plot_dimensions(years, dimensions, high_corr_index + high_cov_index, embeddings=False)
 
 
 
 
+
+
+
+
+
+# ================================ OLD ================================= #
 
 
 #def assign_colors_and_labels(categories):
