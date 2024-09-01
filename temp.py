@@ -1,5 +1,138 @@
 
 
+BASE_URL = "https://journals.aps.org"
+journals = ["prl", "pra", "prb", "prc", "prd", "pre", "prx", "rmp"]
+
+def get_largest_issue_id(journal):
+    issues_url = f"{BASE_URL}/{journal}/issues"
+    response = requests.get(issues_url)
+    soup = BeautifulSoup(response.content, 'html.parser')
+    
+    h4_tags = soup.find_all('h4', id=re.compile('^v\d+'))
+    largest_id = max(int(tag['id'][1:]) for tag in h4_tags)
+    
+    return largest_id
+
+def get_random_issue_page(journal, largest_id):
+    while True:
+        random_id = random.randint(1, largest_id)
+        random_issue_url = f"{BASE_URL}/{journal}/issues/{random_id}#v{random_id}"
+        response = requests.get(random_issue_url)
+        if response.status_code == 200:
+            return response.content, random_id
+
+def get_issue_list(html_content, id_number):
+    soup = BeautifulSoup(html_content, 'html.parser')
+    issue_div = soup.find('h4', id=f'v{id_number}')
+    if not issue_div:
+        return None
+    
+    issue_list = issue_div.find_next('ul').find_all('li')
+    if not issue_list:
+        return None
+    
+    return issue_list
+
+def get_random_paper_url(issue_list):
+    issue_url = BASE_URL + issue_list[random.randint(0, len(issue_list) - 1)].find('a')['href']
+    response = requests.get(issue_url)
+    if response.status_code == 200:
+        return response.content, issue_url
+    else:
+        raise ValueError("Failed to fetch issue page.")
+
+def get_article_list(issue_html_content, issue_url):
+    soup = BeautifulSoup(issue_html_content, 'html.parser')
+    article_sections = soup.find_all('div', class_='article panel article-result')
+    if not article_sections:
+        raise ValueError("No articles found in the issue")
+    
+    articles = []
+    for section in article_sections:
+        group_title_tag = section.find_previous('h4', class_='title')
+        if group_title_tag:
+            group_title = group_title_tag.text.strip()
+        else:
+            group_title = "Unknown"
+
+        article_link = section.find('h5', class_='title').find('a')['href']
+        articles.append((BASE_URL + article_link, group_title))
+    
+    return articles
+
+def get_paper_details(html_content):
+    soup = BeautifulSoup(html_content, 'html.parser')
+    paper_details = {}
+
+    main_div = soup.find('div', class_='medium-9 columns')
+    if not main_div:
+        raise ValueError("No main content div found")
+
+    title_tag = main_div.find('h3')
+    if not title_tag:
+        raise ValueError("No title found")
+    paper_details['title'] = title_tag.text.strip()
+
+    authors_tag = main_div.find('h5', class_='authors')
+    if not authors_tag:
+        raise ValueError("No authors found")
+    paper_details['authors'] = authors_tag.text.strip()
+
+    pub_info_tag = main_div.find('h5', class_='pub-info')
+    if not pub_info_tag:
+        raise ValueError("No publication info found")
+    pub_info_text = pub_info_tag.text.strip()
+    year_match = re.search(r'\d{4}', pub_info_text)
+    paper_details['year'] = year_match.group(0) if year_match else "Unknown"
+
+    abstract_div = soup.find('div', class_='content')
+    if not abstract_div:
+        raise ValueError("No abstract found")
+    abstract_paragraph = abstract_div.find('p')
+    abstract_text = ' '.join(abstract_paragraph.stripped_strings)
+    abstract_text = re.sub(r'<span>[^<]*</span>', '{equation}', abstract_text)
+    paper_details['summary'] = abstract_text.strip()
+
+    return paper_details
+
+def get_aps_papers(numb_papers=1500):
+    journal_issue_map = {journal: get_largest_issue_id(journal) for journal in journals}
+    
+    articles_collected = 0
+    while articles_collected < numb_papers:
+        selected_journal = random.choice(journals)
+        largest_id = journal_issue_map[selected_journal]
+        html_content, random_id = get_random_issue_page(selected_journal, largest_id)
+        issue_list = get_issue_list(html_content, random_id)
+
+        if issue_list:
+            issue_html_content, issue_url = get_random_paper_url(issue_list)
+            article_list = get_article_list(issue_html_content, issue_url)
+            
+            t1 = time.time()
+            for article_url, group_title in article_list:
+                if articles_collected >= numb_papers:
+                    break
+                if t2 - t1 > 1:
+                    time.sleep(t2 - t1)
+                t2 = time.time()
+                paper_html_content = requests.get(article_url).content
+                t1 = time.time()
+                paper_details = get_paper_details(paper_html_content)
+                paper_details['subtitle'] = group_title
+                paper_details['source'] = f'aps-{selected_journal}'
+                yield paper_details
+                articles_collected += 1
+
+# Example usage
+if __name__ == "__main__":
+    numb_papers = 5
+    for paper in get_aps_papers(numb_papers):
+        print(paper)
+
+
+
+
 import time
 import random
 import numpy as np
@@ -348,20 +481,157 @@ if __name__ == '__main__':
 
 
 
+import random
+import time
+
+from crossref_commons.iteration import iterate_publications_as_json
+
+def extract_crossref_metadata(publication_data):
+    """Extract metadata from a CrossRef publication JSON."""
+    title = publication_data.get('title', [''])[0]
+    abstract = publication_data.get('abstract', '')
+    publication_year = publication_data.get('published-print', {}).get('date-parts', [[None]])[0][0]
+    source = publication_data.get('container-title', [''])[0]
+    authors = [f"{author.get('given', '')} {author.get('family', '')}" for author in publication_data.get('author', [])]
+    return {
+        'doi': publication_data.get('DOI', ''),
+        'title': title,
+        'summary': abstract,
+        'year': publication_year,
+        'source': source,
+        'authors': ', '.join(authors)
+    }
+
+def retrieve_crossref_publications(max_results_per_query=1000, total_iterations=500, source_filter=None):
+    """Retrieve publications from CrossRef with metadata, using various queries."""
+    max_results_per_query = min(1000, max_results_per_query)
+    request_buffer_seconds = 1  # Minimum delay between requests XXX check
+    timer = 0
+    if source_filter is None:
+        source_filter = {
+                'type': 'journal-article',
+                'has-abstract': 'true',
+                }
+
+    queries = [
+        # General Science Fields
+        'science OR technology OR biology OR physics OR chemistry OR engineering OR geology OR environmental OR mathematics OR neuroscience OR astronomy OR computer science',
+        # High-Impact Journals
+        'Nature', 'Science', 'PNAS', 'PLOS', 'Physical Review', 'Journal of Applied Physics', 'Journal of High Energy Physics',
+        'Journal of the American Chemical Society', 'Angewandte Chemie', 'Chemical Science', 'Journal of Biological Chemistry', 'Cell', 
+        'Journal of Experimental Biology', 'Geophysical Research Letters', 'Journal of Geophysical Research', 
+        'Environmental Science & Technology', 'Nature Communications', 'Science Advances', 'Journal of Interdisciplinary Science Topics',
+        # Specific Scientific Fields
+        'quantum mechanics OR particle physics OR condensed matter physics OR astrophysics OR nuclear physics',
+        'organic chemistry OR inorganic chemistry OR physical chemistry OR analytical chemistry OR biochemistry OR materials science',
+        'molecular biology OR cellular biology OR genetics OR microbiology OR immunology OR biotechnology',
+        'geology OR geophysics OR climate science OR oceanography OR environmental science',
+        'mechanical engineering OR electrical engineering OR civil engineering OR chemical engineering OR aerospace engineering',
+        'applied mathematics OR pure mathematics OR statistics OR computational science OR artificial intelligence',
+        'interdisciplinary research OR multidisciplinary science OR scientific reviews OR technology and innovation',
+        'complex systems OR systems biology OR nanotechnology OR bioinformatics OR biophysics OR chemical biology'
+    ]
+
+    query_weights = [
+        0.065,  # General Science Fields
+        0.032, 0.032, 0.032, 0.032,  # High-Impact Journals (Nature, Science, PNAS, PLOS)
+        0.019, 0.019, 0.019, 0.019, 0.019,  # High-Impact Journals (Physical Review, JAP, JHEP, Journal of the American Chemical Society, Angewandte Chemie)
+        0.019, 0.019, 0.019, 0.019, 0.019,  # High-Impact Journals (Chemical Science, Journal of Biological Chemistry, Cell, Journal of Experimental Biology, Geophysical Research Letters)
+        0.019, 0.019, 0.019, 0.019, 0.019,  # High-Impact Journals (Journal of Geophysical Research, Environmental Science & Technology, Nature Communications, Science Advances, Journal of Interdisciplinary Science Topics)
+        0.065, 0.065, 0.065, 0.065, 0.065, 0.065, 0.065, 0.065  # Specific Scientific Fields
+    ]
+
+    processed_dois = set()
+
+    max_results = int(max_results_per_query / max(query_weights))
+
+    for iteration in range(total_iterations):
+        for query, weight in zip(queries, query_weights):
+            # Request with buffering to be polite (but also take advantage of any time spent doing other things)
+            if delta_time := (time.time() - timer - request_buffer_seconds) > 0:
+                time.sleep(delta_time)
+            publications = list(iterate_publications_as_json(max_results=int(max_results * weight), filter=source_filter, queries={'query': query}))
+            timer = time.time()
+
+            for publication in publications:
+                doi = publication['DOI']
+                if doi not in processed_dois:
+                    metadata = extract_crossref_metadata(publication)
+                    processed_dois.add(doi)
+                    yield metadata
+
+def main():
+    max_results_per_query = 1000  # Max is 1000 for the free API.
+    total_iterations = 5  # Number of times to repeat queries for diversity
+
+    for pub in retrieve_crossref_publications(max_results_per_query=max_results_per_query, total_iterations=total_iterations):
+        print(f"DOI: {pub['doi']}")
+        print(f"Title: {pub['title']}")
+        print(f"Summary: {pub['summary']}")
+        print(f"Year: {pub['year']}")
+        print(f"Source: {pub['source']}")
+        print(f"Authors: {pub['authors']}")
+        print('-' * 80)
+
+if __name__ == "__main__":
+    main()
 
 
 
 
-"""
+
+import random
+from scholarly import scholarly
+import requests
+
+def get_all(num_papers):
+    for paper in google_query(round(num_papers)*1): # NOTE : Get weights to counteract any biases in the sources that worked.
+        yield paper
+
+
+
+# =========================== WEB OF SCIENCE ============================ #
 
 
 
 
 
+# =============================== SCOPUS ================================ #
 
 
 
 
+# =========================== GOOGLE SCHOLAR ============================ #
 
+def google_scholar_papers(num_papers=2500):
+    """ Retrieve papers from Google Scholar using a weighted random selection of queries. """
+    queries_and_weights = [
+        ("site:scholar.google.com physics OR theoretical physics OR experimental physics OR particle physics OR quantum mechanics OR condensed matter physics", 0.25),
+        ("site:scholar.google.com chemistry OR organic chemistry OR inorganic chemistry OR physical chemistry OR analytical chemistry OR biochemistry OR materials science", 0.20),
+        ("site:scholar.google.com biology OR molecular biology OR cellular biology OR genetics OR microbiology OR immunology OR neurobiology", 0.15),
+        ("site:scholar.google.com earth science OR geology OR geophysics OR environmental science OR climate science OR oceanography", 0.10),
+        ("site:scholar.google.com engineering OR mechanical engineering OR electrical engineering OR civil engineering OR chemical engineering OR materials engineering OR aerospace engineering", 0.10),
+        ("site:scholar.google.com mathematics OR applied mathematics OR pure mathematics OR computer science OR computational science OR artificial intelligence", 0.10),
+        ("site:scholar.google.com multidisciplinary science OR interdisciplinary research OR applied sciences OR scientific reviews OR technology and innovation", 0.10)
+    ]
+    queries = [query for query, weight in queries_and_weights for _ in range(int(weight * 100))]
+
+    for _ in range(num_papers):
+        search_query = random.choice(queries)
+
+        search_results = scholarly.search_pubs(search_query)
+
+        count = 1000
+        for paper in search_results:
+            count -= 1
+            bib = paper.get('bib', {})
+            yield {
+                    'title': bib.get('title', 'No title available'),
+                    'abstract': bib.get('abstract', 'No abstract available'),
+                    'year': bib.get('pub_year', 'No year available'),
+                    'authors': bib.get('author', 'No authors available')
+                }
+            if count <= 0:
+                break
 
 

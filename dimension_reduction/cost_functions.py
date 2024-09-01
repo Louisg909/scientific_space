@@ -22,77 +22,44 @@ from scipy.special import softmax
 
 
 def hessian(original_data, reduced_data):
-    def mean_squared_error(original, reconstructed):
-        return np.mean(np.square(original - reconstructed))
-
-    # Compute the pairwise distances in the original space
     original_distances = pairwise_distances(original_data)
-    
-    # Reconstruct the original distances from the reduced data
     reconstructed_distances = pairwise_distances(reduced_data)
     
-    # Calculate the MSE
-    mse = mean_squared_error(original_distances, reconstructed_distances)
+    mse =np.mean(np.square(original_distances - reconstructed_distances))
     
-    # Normalize to a value between 0 and 1
-    normalized_mse = 1 / (1 + mse)
-    
-    return normalized_mse
+    return  1 / (1 + mse) # normalised
 
 def isomap(original_data, reduced_data):
-    def residual_variance(original, reduced):
-        geodesic_distances = shortest_path(pairwise_distances(original), method='auto', directed=False)
-        euclidean_distances = pairwise_distances(reduced)
-        
-        diff = geodesic_distances - euclidean_distances
-        sum_diff_squared = np.sum(np.square(diff))
-        sum_geodesic_squared = np.sum(np.square(geodesic_distances))
-        
-        residual_variance = 1 - (sum_diff_squared / sum_geodesic_squared)
-        return residual_variance
+    geodesic_distances = shortest_path(pairwise_distances(original_data), method='auto', directed=False)
+    euclidean_distances = pairwise_distances(reduced_data)
 
-    rv = residual_variance(original_data, reduced_data)
-    return rv
+    residual_variance = 1 - np.sum(np.square(geodesic_distances - euclidean_distances)) / np.sum(np.squar(geodesic_distances))
+
+    return residual_variance
 
 
 def tsne(original_data, reduced_data):
     def kl_divergence(P, Q):
-        # Ensure Q is strictly positive
-        Q = np.clip(Q, 1e-12, None)
+        Q = np.clip(Q, 1e-12, None) # Q has to be positive
         return np.sum(P * np.log(P / Q))
 
     def compute_joint_probabilities(distances, eps=1e-12):
         probabilities = np.exp(-distances ** 2)
-        sum_probabilities = np.sum(probabilities, axis=1, keepdims=True)
-        sum_probabilities = np.where(sum_probabilities == 0, eps, sum_probabilities)  # Avoid division by zero
-        probabilities = probabilities / sum_probabilities
-        # Avoid zero probabilities
-        probabilities = np.clip(probabilities, eps, 1 - eps)
-        return probabilities
+        probabilities /= np.maximum(np.sum(probabilities, axis=1, keepdims=True), eps)
 
-    original_distances = pairwise_distances(original_data)
-    reduced_distances = pairwise_distances(reduced_data)
-    
-    P = compute_joint_probabilities(original_distances)
-    Q = compute_joint_probabilities(reduced_distances)
+        return np.clip(probabilities, eps, 1 - eps)
+
+
+    P = compute_joint_probabilities(pairwise_distances(original_distances))
+    Q = compute_joint_probabilities(pairwise_distances(reduced_distances))
     
     # Symmetrize the probability matrices
     P = (P + P.T) / (2 * P.shape[0])
     Q = (Q + Q.T) / (2 * Q.shape[0])
     
-    if np.any(P == 0) or np.any(Q == 0):
-        print("Warning: P or Q contains zeros which will lead to invalid KL divergence computation.")
-    
     kl_div = kl_divergence(P, Q)
     
-    # Normalize to a value between 0 and 1
-    if np.isinf(kl_div) or np.isnan(kl_div):
-        print("Warning: KL divergence resulted in an invalid value (inf or NaN).")
-    
     normalized_kl_div = 1 / (1 + kl_div)
-    
-    if np.isinf(normalized_kl_div) or np.isnan(normalized_kl_div):
-        print("Warning: Normalized KL divergence resulted in an invalid value (inf or NaN).")
     
     return normalized_kl_div
 
@@ -230,68 +197,3 @@ def calculate_metrics(original_data, reduced_data):
     }
 
 
-# ======================== OTHER UNSORTED CODE ========================= #
-
-# XXX I don't know - this following code may be useful and I can't be asked to look at it right now, so I am putting it here so I can simplify the repository strucutre.
-"""
-
-import numpy as np
-from sklearn.metrics import silhouette_score, davies_bouldin_score
-from sklearn.decomposition import PCA
-from scipy.spatial import procrustes
-
-
-from metrics import calculate_metrics
-
-# TODO
-- Get baselines
-- Research how do add the different metrics
-- Implement each metric
-
-
-def get_baseline(dt):
-    # get baslines to compare metrics to.
-    baseline_metrics = {}
-    random_data = np.random.rand(*dt.data.shape)
-    baseline_metrics['random'] = calculate_metrics(dt.data, random_data)
-    baseline_metrics['original'] = calculate_metrics(dt.data, dt.data)
-
-def evaluate_metrics(dt):
-    dt.metrics['rand'] = calculate_metrics(dt.data, dt.reduced_data['rand'])
-    dt.metrics['PCA'] = calculate_metrics(dt.data, dt.reduced_data['PCA'])
-    dt.metrics['tsne'] = calculate_metrics(dt.data, dt.reduced_data['tsne'])
-    dt.metrics['pca tsne'] = calculate_metrics(dt.data, dt.reduced_data['pca tsne'])
-    dt.metrics['iso'] = calculate_metrics(dt.data, dt.reduced_data['iso'])
-    dt.metrics['pca iso'] = calculate_metrics(dt.data, dt.reduced_data['pca iso'])
-    dt.metrics['hes'] = calculate_metrics(dt.data, dt.reduced_data['hes'])
-    dt.metrics['pca hes'] = calculate_metrics(dt.data, dt.reduced_data['pca hes'])
-
-    dt.scaled_metrics = scale_metric(dt.metrics, baseline_metrics)
-
-    print(f'# Metrics: \n' + '\n'.join(key + '\t'.join(n for n in value) for key, value in dt.metrics.items()))
-    print(f'# Scaled metrics: \n' + '\n'.join(key + '\t'.join(n for n in value) for key, value in dt.scaled_metrics.items()))
-
-
-def scale_metrics(metrics, baseline_metrics):
-    scaled_metrics = {}
-    for method, method_metrics in metrics.items():
-        scaled_metrics[method] = {}
-        for metric_name, metric_value in method_metrics.items():
-            r = baseline_metrics['random'][metric_name]
-            o = baseline_metrics['original'][metric_name]
-            if o <= x <= r or r <= x <= o:
-                scaled_metrics[method][metric_name] = (x - r) / (o - r)
-            elif x < o and x < r:
-                scaled_metrics[method][metric_name] = -abs(o - r) / (2 * (o - r)) + 1/2
-            else:
-                scaled_metrics[method][metric_name] = abs(o - r) / (2 * (o - r)) + 1/2
-    return scaled_metrics
-
-
-def calculate_metrics(original_data, reduced_data):
-    silhouette = silhouette_score(original_data, reduced_data)
-    db_index = davies_bouldin_score(original_data, reduced_data)
-    # Add other metrics here
-    return silhouette, db_index
-
-"""

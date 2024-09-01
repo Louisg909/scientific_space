@@ -1,29 +1,27 @@
 
+
 import sqlite3
 import traceback
 
-# TODO add dictionary capability to all functions
-
-
 class db:
-    def __init__(self):
-        self.file = 'science_papers.db'
-        self.conn = None
-        self.c = None
+    def __init__(self, db_file='science_papers.db'):
+        self.db_file = db_file
+        self.connection = None
+        self.cursor = None
 
     def __enter__(self):
-        self.conn = sqlite3.connect(self.file)
-        self.c = self.conn.cursor()
-        self._create_tables()  # Ensure tables are created
+        self.connection = sqlite3.connect(self.db_file)
+        self.cursor = self.connection.cursor()
+        self._create_tables()
         return self
 
-    def __exit__(self, exc_type, exc_value, traceback_obj):
+    def __exit__(self, exc_type, exc_value, tb):
         if exc_type is None:
-            self.conn.commit()
+            self.connection.commit()
         else:
-            traceback.print_exception(exc_type, exc_value, traceback_obj)
-        if self.conn is not None:
-            self.conn.close()
+            traceback.print_exception(exc_type, exc_value, tb)
+        if self.connection:
+            self.connection.close()
 
     def _create_tables(self):
         """Create tables if they do not exist."""
@@ -79,183 +77,129 @@ class db:
             CREATE TABLE IF NOT EXISTS authors (
                 id INTEGER PRIMARY KEY,
                 name TEXT
-                )
+            )
             '''
         ]
-        
         for query in table_creation_queries:
-            self.c.execute(query)
+            self.cursor.execute(query)
 
-    def _get_keys(self, table):
-        if table == 'authors':
-            return  ['id', 'name']
-        if table == 'author_papers':
-            return ['id', 'title', 'summary', 'year', 'author_id', 'embedding']
-        if table == 'paper_references':
-            return ['parent_id', 'child_id', 'weighting']
-        if table == 'citation_papers':
-            return ['id', 'title', 'summary', 'author', 'year', 'category', 'embedding', 'cited_by', 'cites', 'c_vector', 'c_mag']
-        return ['id', 'title', 'summary', 'author', 'year', 'category', 'embedding']
-
-
-    def _tuple_to_dict(self, row, table='papers'):
-        return dict(zip(self._get_keys(table), row))
-
-    def _dict_to_tuple(self, dictionary, table='papers'):
-        return tuple(dictionary[key] for key in self._get_keys(table))
+    def _get_column_names(self, table_name):
+        match table_name:
+            case 'authors':
+                return  ['id', 'name']
+            case 'author_papers':
+                return ['id', 'title', 'summary', 'year', 'author_id', 'embedding']
+            case 'paper_references':
+                return ['parent_id', 'child_id', 'weighting']
+            case 'citation_papers':
+                return ['id', 'title', 'summary', 'author', 'year', 'category', 'embedding', 'cited_by', 'cites', 'c_vector', 'c_mag']
+        return ['id', 'title', 'summary', 'author', 'year', 'category', 'embedding'] # default
 
 
-    def _get_columns_for_table(self, table):
-        """
-        Fetches the column names for the specified table from the SQLite database.
-        
-        Args:
-            table (str): The name of the table.
-        
-        Returns:
-            list: A list of column names.
-        """
-        self.c.execute(f"PRAGMA table_info({table})")
-        columns_info = self.c.fetchall()
-        columns = [info[1] for info in columns_info]  # The second item in each row is the column name
-        return columns
+    def _tuple_to_dict(self, row, table_name='papers'):
+        return dict(zip(self._get_column_names(table_name), row))
 
-    def insert(self, table, row, format='tuple'):
-        """
-        Inserts data into the specified table in the SQLite database.
-        
-        Args:
-            table (str): The name of the table where data will be inserted.
-            row (tuple or dict): A tuple representing a single row of data or a dictionary where keys are column names.
-            format (str, optional): The format of the input data ('tuple' or 'dict'). Defaults to 'tuple'.
-        
-        Returns:
-            int: The ID of the inserted or existing record.
-        """
-        if format == 'dict':
-            columns = row.keys()
-            values = tuple(row.values())
-        else:
-            # If the format is 'tuple', we assume the columns need to be specified
-            # The caller needs to provide the correct columns in the right order
-            columns = self._get_columns_for_table(table)
-            values = row
+    def _dict_to_tuple(self, dictionary, table_name='papers'):
+        return tuple(dictionary.get(column, None) for column in self._get_column_names(table_name))
+
+    def insert(self, record, table_name='papers', input_format='tuple'):
+        try:
+            # Automatically rename 'authors' to 'author' if present in the record
+            if input_format == 'dict':
+                if 'authors' in record:
+                    record['author'] = record.pop('authors')
+                
+                # Get the actual columns from the database
+                self.cursor.execute(f'PRAGMA table_info({table_name})')
+                table_columns = [info[1] for info in self.cursor.fetchall()]
+                
+                # Filter out any keys that aren't actual columns
+                filtered_record = {key: record.get(key, None) for key in table_columns}
+                
+                columns = filtered_record.keys()
+                values = tuple(filtered_record.values())
+            else:
+                columns = self._get_column_names(table_name)
+                values = record
     
-        # Create placeholders for the SQL queries
-        placeholders = ', '.join('?' for _ in columns)
-        
-        # Build the SELECT query to check if the row already exists
-        check_query = f'''
-            SELECT id FROM {table}
-            WHERE {' AND '.join([f"{col} = ?" for col in columns])}
-        '''
-        self.c.execute(check_query, values)
-        existing_id = self.c.fetchone()
-        
-        if existing_id:
-            # If it exists, return the existing ID
-            return existing_id[0]
-        else:
-            # Build the INSERT query
-            insert_query = f'''
-                INSERT INTO {table} ({', '.join(columns)})
-                VALUES ({placeholders})
-            '''
-            self.c.execute(insert_query, values)
-            # Get the ID of the newly inserted record
-            return self.c.lastrowid
+            placeholders = ', '.join('?' for _ in columns)
+    
+            # Adjust the check query to only use the provided keys
+            check_query = f'SELECT id FROM {table_name} WHERE {" AND ".join([f"{col} = ?" for col in columns])}'
+            
+            try:
+                self.cursor.execute(check_query, values)
+                existing_record = self.cursor.fetchone()
+            except sqlite3.OperationalError as e:
+                print(f"Error executing query: {e}")
+                return None
+    
+            if existing_record:
+                return existing_record[0]
+            else:
+                try:
+                    insert_query = f"INSERT INTO {table_name} ({', '.join(columns)}) VALUES ({placeholders})"
+                    self.cursor.execute(insert_query, values)
+                    return self.cursor.lastrowid
+                except sqlite3.OperationalError as e:
+                    print(f"Error executing insert: {e}")
+                    return None
+        except Exception as e:
+            # Catch any exception, print the error, and continue
+            print(f"An error occurred: {e}")
+            return None
 
-    def access(self, table='papers', select='*', limit=None, format='tuple'):
-        """
-        Accesses the specified table in the SQLite database and yields rows one at a time.
-    
-        Args:
-            table (str): The name of the table to query. Defaults to 'papers'.
-            select (str): The columns to select from the table. Defaults to '*', which selects all columns.
-            limit (int, optional): The maximum number of rows to return. If None, all rows are returned.
-            format (str, optional): Format of output, whether tuple or dict.
-    
-        Yields:
-            tuple: A tuple representing a row in the result set.
-        """
-        query = f'SELECT {select} FROM {table}'
-        if limit is not None:
+    def fetch(self, table_name='papers', select='*', where_conditions=None, limit=None, output_format='tuple'):
+        """Accesses the specified table in the SQLite database and yields rows one at a time."""
+        query = f'SELECT {select} FROM {table_name}'
+        if where_conditions:
+            query += ' WHERE ' + ' AND '.join([f"{column} = ?" for column in where_conditions[0]])
+
+        if limit:
             query += f' LIMIT {limit}'
         
-        self.c.execute(query)
+        self.cursor.execute(query, where_conditions[1] if where_conditions else ())
     
-        while True:
-            row = self.c.fetchone()
-            if row is None:
-                break
-            if format=='tuple':
-                yield row
-            if format=='dict':
-                yield self._tuple_to_dict(row, table=table)
+        while (row := self.cursor.fetchone()) is not None:
+            yield self._tuple_to_dict(row, table_name) if output_format == 'dict' else row
 
-    def grab(self, table='papers', select='*', where=None):
-        """
-        Fetches a single row based on the specified conditions.
-    
-        Args:
-            table (str): The name of the table to query.
-            select (str): The columns to select.
-            where (tuple): A tuple where the first element is a list of column names for conditions,
-                            and the second element is a tuple of values for these conditions.
-    
-        Returns:
-            tuple: A tuple representing a row in the result set or None if no row matches.
-        """
-        query = f'SELECT {select} FROM {table}'
-        if where:
-            query += ' WHERE ' + ' AND '.join([f"{column} = ?" for column in where[0]])
+    def fetch_one(self, table_name='papers', select='*', where_conditions=None, output_format='tuple'):
+        """ Fetches a single row based on the specified conditions. """
+        query = f'SELECT {select} FROM {table_name}'
+        if where_conditions:
+            query += ' WHERE ' + ' AND '.join([f"{column} = ?" for column in where_conditions[0]])
         
         query += ' LIMIT 1'
     
-        self.c.execute(query, where[1] if where else ())
-        return self.c.fetchone()
+        self.cursor.execute(query, where_conditions[1] if where_conditions else ())
+        row = self.cursor.fetchone()
+        return self._tuple_to_dict(row, table_name) if output_format == 'dict' else row
 
-    def edit(self, table, function, condition=None):
-        """
-        Processes all rows in the specified table and updates them based on a function.
-    
-        Args:
-            table (str): The name of the table to be edited.
-            function (func): The function that takes an old row and returns a new row.
-            condition (str, optional): The condition to filter rows. It should be a valid SQL condition.
-        """
-        query = f'SELECT * FROM {table}'
+    def update(self, table_name, update_function, condition=None):
+        """ Updates every row that meets a condition by the update_function """
+        query = f'SELECT * FROM {table_name}'
         if condition:
             query += f' WHERE {condition}'
         
-        self.c.execute(query)
-        rows = self.c.fetchall()
+        self.cursor.execute(query)
+        rows = self.cursor.fetchall()
     
-        column_names = [description[0] for description in self.c.description]
+        column_names = [description[0] for description in self.cursor.description]
     
-        done = 0
-        print()
         for row in rows:
-            new_row = function(row)
+            new_row = update_function(row)
     
             set_clause = ', '.join(f"{col} = ?" for col in column_names[1:])
     
-            self.c.execute(f'''
-                UPDATE {table}
-                SET {set_clause}
-                WHERE {column_names[0]} = ?
-            ''', new_row[1:] + (row[0],))
-            done += 1
-            print('\rCompleted:\t' + str(done))
+            self.cursor.execute(f' UPDATE {table_name} SET {set_clause} WHERE {column_names[0]} = ?  ', new_row[1:] + (row[0],))
 
-    def show_tables(self):
+    def list_tables(self):
         """
         Returns a list of all table names in the SQLite database.
     
         Returns:
             list: A list of table names.
         """
-        self.c.execute("SELECT name FROM sqlite_master WHERE type='table';")
-        tables = self.c.fetchall()
-        return [table[0] for table in tables]
+        self.cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+        return [table[0] for table in self.cursor.fetchall()]
 

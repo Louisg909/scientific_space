@@ -1,4 +1,3 @@
-
 import numpy as np
 from scipy.spatial import KDTree
 from scipy.sparse import lil_matrix
@@ -6,34 +5,22 @@ from scipy.sparse.linalg import eigsh
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE, Isomap
-import itertools
 from sklearn.neighbors import NearestNeighbors
+import itertools
 
 if __name__ == '__main__':
-    from parameter_finder import param_search
+    from parameter_finder import parameter_search
     import cost_functions as cost
 else:
-    from .parameter_finder import param_search
-    from . import cost_functions as cost
+    from dimension_reduction.parameter_finder import parameter_search
+    from dimension_reduction import cost_functions as cost
 
 
-def find_npca(data):
-    """
-    Plots the cumulative variance and allows the user to input the desired variance threshold.
-    
-    Parameters:
-    data : ndarray
-        The input data to perform PCA on.
-    
-    Returns:
-    float
-        The variance threshold specified by the user.
-    """
-    # Perform PCA to calculate the explained variance
+def plot_cumulative_variance(data):
+    """Plots the cumulative variance explained by PCA components."""
     pca = PCA().fit(data)
     cumulative_variance = np.cumsum(pca.explained_variance_ratio_)
     
-    # Plot the cumulative variance
     plt.figure(figsize=(8, 5))
     plt.plot(cumulative_variance, marker='o', linestyle='--')
     plt.xlabel('Number of Principal Components')
@@ -42,165 +29,87 @@ def find_npca(data):
     plt.grid(True)
     plt.show()
     
-    # Ask the user for their desired variance threshold
-    variance_threshold = float(input('Please enter the desired variance threshold (e.g., 0.95 for 95%):\t'))
-    return variance_threshold
-
-def get_npca(data, variance_threshold=0.95):
-    """
-    Applies PCA on the data to retain a specified amount of variance.
-    
-    Parameters:
-    data : ndarray
-        Takes the data as an input.
-    variance_threshold : float, optional, default=0.95
-        The amount of original variance to retain in the reduction.
-    """
+def get_npca_model(data, variance_threshold=0.95):
+    """Calculates the number of PCA components needed to retain the specified variance, before returning the model"""
     pca = PCA().fit(data)
     cumulative_variance = np.cumsum(pca.explained_variance_ratio_)
     n_components = np.argmax(cumulative_variance >= variance_threshold) + 1
     return PCA(n_components=n_components) # data is fitted by the return value.fit_transform(data)
 
 
-def apply_reductions(raw, n_pca):
-    """
-    Applies multiple dimensionality reduction techniques on the data.
-    data : ndarray
-        Takes the data as an input.
-    """
-    def get_dict(result):
+def apply_dimensionality_reduction(raw_data, npca_data):
+    """Applies the various dimensionality reduction techniques to the data."""
+    def create_result_dict(result):
         return {'data': result[1], 'info': result[0]}
 
-    # parameters
-    tsne_raw = get_dict(param_search(apply_tsne, cost.tsne, raw, perplexity=(5,50))) 
-    tsne_npca = get_dict(param_search(apply_tsne, cost.tsne, n_pca, perplexity=(5,50)))
-    print(tsne_npca)
+    tsne_raw = create_result_dict(parameter_search(apply_tsne, cost.tsne, raw_data, perplexity=(5, 50))) 
+    tsne_npca = create_result_dict(parameter_search(apply_tsne, cost.tsne, npca_data, perplexity=(5, 50)))
 
-    isomap_raw = get_dict(param_search(apply_isomap, cost.isomap, raw, n_neighbors=(2,20)))
-    isomap_npca = get_dict(param_search(apply_isomap, cost.isomap, n_pca, n_neighbors=(2,20)))
+    isomap_raw = create_result_dict(parameter_search(apply_isomap, cost.isomap, raw_data, n_neighbors=(2, 20)))
+    isomap_npca = create_result_dict(parameter_search(apply_isomap, cost.isomap, npca_data, n_neighbors=(2, 20)))
 
-    # hessian_raw = get_dict(param_search(apply_hessian, cost.hessian, raw, n_neighbors=(2,20)))
-    #hessian_npca = get_dict(param_search(apply_hessian, cost.hessian, n_pca, n_neighbors=(2,20)))
-    hessian_raw = {'info' : 'Fillers because hessian doesn\'t like to work on big datasets.', 'data': isomap_raw}
+    #hessian_raw = get_dict(parameter_search(apply_hessian, cost.hessian, raw, n_neighbors=(2,20)))
+    #hessian_npca = get_dict(parameter_search(apply_hessian, cost.hessian, n_pca, n_neighbors=(2,20)))
+    hessian_dummy = {'info' : 'Hessian doesn\'t work well with large datasets, using Isomap as placeholder', 'data': isomap_raw}
+
+    return {
+            'random_projection' : apply_random_projection(raw),
+            'pca' : {'data': apply_pca(raw), 'info':''},
+            'tsne_raw' : tsne_raw,
+            'tsne_npca' : tsne_npca,
+            'iso_raw' : isomap_raw,
+            'iso_npca' : isomap_npca,
+            'hessian_dummy' : hessian_dummy,
+            'hessian_dummy' : hessian_dummy
+        }
 
 
-    return {'rand' : apply_random(raw), 'pca' : {'data': apply_pca(raw), 'info':''}, 'tsne' : tsne_raw, 'pca_tsne' : tsne_npca,
-            'iso' : isomap_raw, 'pca_iso' : isomap_npca, 'hes' : hessian_raw, 'hes again lol' : hessian_raw}
-
-
-
-def apply_random(data):
-    """
-    Applies a random projection of the data.
-    
-    Parameters:
-    data : ndarray
-        Takes the data as an input.
-    """
+def apply_random_projection(data):
+    """Applies a random projection to the data."""
     axes = np.random.choice(data.shape[1], size=2, replace=False)
-    return {'data': data[:, axes], 'info': axes}
+    return {'data': data[:, axes], 'info': {'axes': axes}}
 
 def apply_pca(data):
-    """
-    Applies PCA on the data to reduce it to 2 dimensions.
-
-    Parameters:
-    data : ndarray
-        Takes the data as an input.
-    """
-    pca = PCA(n_components=2).fit_transform(data)
-    return pca
+    """ Applies PCA on the data to reduce it to 2 dimensions."""
+    return PCA(n_components=2).fit_transform(data)
 
 def apply_tsne(data, perplexity=30.0):
-    max_iter=1000
-    """
-    Applies t-SNE on both the data and npca to reduce them to 2 dimensions.
-    
-    Parameters:
-    data : ndarray
-        Takes the data as an input.
-    perplexity : float, optional, default=30.0
-        The perplexity is related to the number of nearest neighbors that is used in other manifold learning algorithms.
-    """
-    return TSNE(n_components=2, perplexity=perplexity, learning_rate='auto', max_iter=max_iter).fit_transform(data)
+    """ Applies t-SNE to reduce the data to 2 dimensions.  """
+    return TSNE(n_components=2, perplexity=perplexity, learning_rate='auto', max_iter=1000).fit_transform(data)
 
 def apply_isomap(data, n_neighbors=5):
-    """
-    Applies Isomap on both the data and npca to reduce them to 2 dimensions.
-    
-    Parameters:
-    data : ndarray
-        Takes the data as an input.
-    n_neighbors : int, optional, default=5
-        Number of neighbors to consider for each point.
-    """
+    """ Applies Isomap to reduce the data to 2 dimensions.  """
     return Isomap(n_components=2, n_neighbors=int(n_neighbors)).fit_transform(data)
 
 def apply_hessian(data, n_neighbors=10):
-    """
-    Applies Isomap on both the data and npca to reduce them to 2 dimensions.
-    
-    Parameters:
-    data : ndarray
-        Takes the data as an input.
-    n_neighbors : int, optional, default=10
-        Number of neighbors to consider for each point.
-    """
-    n_neighbors=int(n_neighbors)
-    # Step 1: Compute the k-nearest neighbors
+    """ Applies Hessian Locally Linear Embedding (LLE) to reduce the data to 2 dimensions."""
+    n_neighbors = int(n_neighbors)
+
     tree = KDTree(data)
-    distances, indices = tree.query(data, k=n_neighbors + 1)  # +1 because the first neighbor is the point itself
+    _, indices = tree.query(data, k=n_neighbors + 1)  # +1 because the first neighbor is the point itself
     
-    # Step 2: Compute the weight matrix
-    N, D = data.shape
-    W = lil_matrix((N, N))
-    for i in range(N):
+    amples, _ = data.shape
+    weight_matrix = lil_matrix((n_samples, n_samples))
+    for i in range(n_samples):
         neighbors = indices[i][1:]  # skip the first neighbor (the point itself)
         Z = data[neighbors] - data[i]  # center the neighbors
         C = Z @ Z.T
         C = (C + C.T) / 2  # make sure C is symmetric
         w = np.linalg.solve(C + np.eye(n_neighbors) * 1e-3, np.ones(n_neighbors))  # solve Cw = 1
         w /= w.sum()  # normalize the weights
-        W[i, neighbors] = w
+        weight_matrix[i, neighbors] = w
     
-    # Step 3: Compute the Hessian matrix
-    H = lil_matrix((N, N))
-    for i in range(N):
+    hessian_matrx = lil_matrix((n_samples, n_samples))
+    for i in range(n_samples):
         neighbors = indices[i][1:]
-        for a in range(n_neighbors):
-            for b in range(n_neighbors):
-                H[i, neighbors[a]] += W[i, neighbors[a]] * W[i, neighbors[b]]
-                H[i, neighbors[b]] += W[i, neighbors[a]] * W[i, neighbors[b]]
+        for a, b in itertools.product(range(n_neighbors), repeat=2):
+            hessian_matrix[i, neighbors[a]] += weight_matrix[i, neighbors[a]] * weight_matrix[i, neighbors[b]]
+            hessian_matrix[i, neighbors[b]] += weight_matrix[i, neighbors[a]] * weight_matrix[i, neighbors[b]]
+
+    hessain_matrix = (hessian_matrix + hessian_matrix.T) / 2
     
-    # Make H symmetric
-    H = (H + H.T) / 2
-    
-    # Step 4: Compute the eigenvalues and eigenvectors
-    print('\n\nFinding eigs', flush=True)
-    print(f'H:\n{H}', flush=True)
-    eigenvalues, eigenvectors = eigsh(H, k=3, which='SM', maxiter=20000, tol=1e-4)  # smallest magnitude
+    eigenvalues, eigenvectors = eigsh(hessian_matrix, k=3, which='SM', maxiter=20000, tol=1e-4)
     
     # Return the two eigenvectors corresponding to the second and third smallest eigenvalues
     return eigenvectors[:, 1:3]
-
-
-if __name__ == '__main__':
-    np.random.seed(42)
-    
-    # Generate high-dimensional data (e.g., 1000 samples, 100 features)
-    n_samples = 1000
-    n_features = 100
-
-    # Create random high-dimensional data
-    high_dim_data = np.random.rand(n_samples, n_features)
-
-    def get_dict(result):
-        return {'data': result[1], 'info': result[0]}
-
-    a, b = param_search(apply_tsne, cost.tsne, high_dim_data, initial_lr=10, **{'perplexity':(5,20)})
-    print(a)
-    print(b)
-    tsne_raw = get_dict((a, b))
-
-    print(tsne_raw)
 

@@ -1,3 +1,4 @@
+import time
 import requests
 from bs4 import BeautifulSoup
 import random
@@ -126,7 +127,7 @@ def get_paper_details(html_content):
 
     return paper_details
 
-def get_aps_papers(numb_papers):
+def get_aps_papers(numb_papers=1500):
     journal_issue_map = {journal: get_largest_issue_id(journal) for journal in journals}
     
     articles_collected = 0
@@ -140,10 +141,15 @@ def get_aps_papers(numb_papers):
             issue_html_content, issue_url = get_random_paper_url(issue_list)
             article_list = get_article_list(issue_html_content, issue_url)
             
+            t1 = time.time()
             for article_url, group_title in article_list:
                 if articles_collected >= numb_papers:
                     break
+                if t2 - t1 > 1:
+                    time.sleep(t2 - t1)
+                t2 = time.time()
                 paper_html_content = requests.get(article_url).content
+                t1 = time.time()
                 paper_details = get_paper_details(paper_html_content)
                 paper_details['subtitle'] = group_title
                 paper_details['source'] = f'aps-{selected_journal}'
@@ -155,44 +161,5 @@ if __name__ == "__main__":
     numb_papers = 5
     for paper in get_aps_papers(numb_papers):
         print(paper)
-
-
-
-
-
-
-
-
-
-
-# ===================== JOURNAL OF APPLIED PHYSICS ====================== #
-# ================================= 2% ================================== #
-
-
-
-
-# =============== JOURNAL OF HIGH ENERGY PHYSICS (JHEP) ================ #
-# ================================= 2% ================================== #
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 

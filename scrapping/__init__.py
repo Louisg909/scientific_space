@@ -1,1 +1,1 @@
-from .main import *
+from .author_scrape import scrape_author

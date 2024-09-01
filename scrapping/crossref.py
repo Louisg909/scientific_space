@@ -1,15 +1,17 @@
-from crossref_commons.iteration import iterate_publications_as_json
 import random
 import time
 
-def extract_metadata(data):
-    title = data.get('title', [''])[0]
-    abstract = data.get('abstract', '')
-    publication_year = data.get('published-print', {}).get('date-parts', [[None]])[0][0]
-    source = data.get('container-title', [''])[0]
-    authors = [f"{author.get('given', '')} {author.get('family', '')}" for author in data.get('author', [])]
+from crossref_commons.iteration import iterate_publications_as_json
+
+def extract_crossref_metadata(publication_data):
+    """Extract metadata from a CrossRef publication JSON."""
+    title = publication_data.get('title', [''])[0]
+    abstract = publication_data.get('abstract', '')
+    publication_year = publication_data.get('published-print', {}).get('date-parts', [[None]])[0][0]
+    source = publication_data.get('container-title', [''])[0]
+    authors = [f"{author.get('given', '')} {author.get('family', '')}" for author in publication_data.get('author', [])]
     return {
-        'doi': data.get('DOI', ''),
+        'doi': publication_data.get('DOI', ''),
         'title': title,
         'summary': abstract,
         'year': publication_year,
@@ -17,21 +19,25 @@ def extract_metadata(data):
         'authors': ', '.join(authors)
     }
 
-def retrieve_publications_with_metadata(max_results_per_query=1000, total_iterations=5):
+def retrieve_crossref_publications(max_results_per_query=1000, total_iterations=500, source_filter=None):
+    """Retrieve publications from CrossRef with metadata, using various queries."""
     max_results_per_query = min(1000, max_results_per_query)
-
-    request_buffer = 1  # Minimum number of seconds between each request
+    request_buffer_seconds = 1  # Minimum delay between requests XXX check
     timer = 0
-    filter = {
-        'type': 'journal-article',  # Focus on journal articles
-        'has-abstract': 'true',     # Ensure we get publications with abstracts
-    }
+    if source_filter is None:
+        source_filter = {
+                'type': 'journal-article',
+                'has-abstract': 'true',
+                }
 
-    queries_list = [
+    queries = [
         # General Science Fields
         'science OR technology OR biology OR physics OR chemistry OR engineering OR geology OR environmental OR mathematics OR neuroscience OR astronomy OR computer science',
         # High-Impact Journals
-        'Nature', 'Science', 'PNAS', 'PLOS', 'Physical Review', 'Journal of Applied Physics', 'Journal of High Energy Physics', 'Journal of the American Chemical Society', 'Angewandte Chemie', 'Chemical Science', 'Journal of Biological Chemistry', 'Cell', 'Journal of Experimental Biology', 'Geophysical Research Letters', 'Journal of Geophysical Research', 'Environmental Science & Technology', 'Nature Communications', 'Science Advances', 'Journal of Interdisciplinary Science Topics',
+        'Nature', 'Science', 'PNAS', 'PLOS', 'Physical Review', 'Journal of Applied Physics', 'Journal of High Energy Physics',
+        'Journal of the American Chemical Society', 'Angewandte Chemie', 'Chemical Science', 'Journal of Biological Chemistry', 'Cell', 
+        'Journal of Experimental Biology', 'Geophysical Research Letters', 'Journal of Geophysical Research', 
+        'Environmental Science & Technology', 'Nature Communications', 'Science Advances', 'Journal of Interdisciplinary Science Topics',
         # Specific Scientific Fields
         'quantum mechanics OR particle physics OR condensed matter physics OR astrophysics OR nuclear physics',
         'organic chemistry OR inorganic chemistry OR physical chemistry OR analytical chemistry OR biochemistry OR materials science',
@@ -53,37 +59,29 @@ def retrieve_publications_with_metadata(max_results_per_query=1000, total_iterat
     ]
 
     processed_dois = set()
-    total_retrieved = 0
 
-    total_papers = int(max_results_per_query / max(query_weights))
+    max_results = int(max_results_per_query / max(query_weights))
 
     for iteration in range(total_iterations):
-        print(f"Starting iteration {iteration + 1}/{total_iterations}")
-        for query, weight in zip(queries_list, query_weights):
-            print(f"Making a request with query: {query}")
-
+        for query, weight in zip(queries, query_weights):
             # Request with buffering to be polite (but also take advantage of any time spent doing other things)
-            delta_time = request_buffer - (time.time() - timer)
-            if delta_time > 0:
+            if delta_time := (time.time() - timer - request_buffer_seconds) > 0:
                 time.sleep(delta_time)
-            new_publications = list(iterate_publications_as_json(max_results=int(total_papers * weight), filter=filter, queries={'query': query}))
+            publications = list(iterate_publications_as_json(max_results=int(max_results * weight), filter=source_filter, queries={'query': query}))
             timer = time.time()
 
-            for publication in new_publications:
+            for publication in publications:
                 doi = publication['DOI']
-                if doi not in processed_dois:  # Skip already processed DOIs
-                    extracted_data = extract_metadata(publication)
+                if doi not in processed_dois:
+                    metadata = extract_crossref_metadata(publication)
                     processed_dois.add(doi)
-                    yield extracted_data
-
-            total_retrieved += len(new_publications)
-            print(f"Retrieved {total_retrieved} publications so far...")
+                    yield metadata
 
 def main():
-    max_results_per_query = 1000  # Number of results per query iteration - max is 1000 for the free API.
+    max_results_per_query = 1000  # Max is 1000 for the free API.
     total_iterations = 5  # Number of times to repeat queries for diversity
 
-    for pub in retrieve_publications_with_metadata(max_results_per_query=max_results_per_query, total_iterations=total_iterations):
+    for pub in retrieve_crossref_publications(max_results_per_query=max_results_per_query, total_iterations=total_iterations):
         print(f"DOI: {pub['doi']}")
         print(f"Title: {pub['title']}")
         print(f"Summary: {pub['summary']}")

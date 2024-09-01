@@ -1,3 +1,4 @@
+# biology.py
 
 import requests
 import xml.etree.ElementTree as ET
@@ -8,9 +9,10 @@ import random
 def get_all(max_results):
     max(5, max_results)
     max_results = max(8, max_results) # 8 is the amount needed to get the distribution
-    numb = {'jbc': max_results // 3,
-                  'cell': max_results // 2.25,
-                  'jeb': max_results // 4.5}
+
+    numb = {'jbc': int(max_results // 3),
+            'cell': int(max_results // 2.25),
+            'jeb': int(max_results // 4.5)}
 
     for paper in jbc(numb['jbc']):
         yield paper
@@ -90,7 +92,7 @@ def cell_sample_years(start_year=0, end_year=34, num_samples=1000):
     years = np.arange(start_year, end_year + 1)
     growth_rates = 0.04 * np.exp(0.2 * years) + 3.14
     probabilities = growth_rates / np.sum(growth_rates)
-    sampled_years = np.random.choice(years, size=num_samples, p=probabilities) + 1990
+    sampled_years = np.random.choice(years, size=(num_samples), p=probabilities) + 1990
     return dict(zip(*np.unique(sampled_years, return_counts=True)))
 
 def cell(max_results):
@@ -144,7 +146,7 @@ def jeb(max_results):
 
 
 if __name__ == '__main__':
-    for paper in jeb(5):
+    for paper in jbc(5):
         print(paper)
 
 

@@ -1,74 +1,50 @@
-
-
-
-
-
 import numpy as np
 
-def calculate_weights(p, v=None):
-    """
-    Calculate the weights, normalized weights, and contribution vector for a given vector p and a set of parent vectors v.
+def calculate_inheritance_factor(source_embedding, citation_embedding):
+    # Reshape citation_embedding to be a column vector
+    citation_embedding = citation_embedding.reshape(-1, 1)
 
-    Parameters:
-    p (np.ndarray): Target vector.
-    v (np.ndarray): 2D array where each row is a parent vector.
+    citation_contribution = np.dot(source_embedding.T, citation_embedding)
+    citation_norm_squared = np.dot(citation_embedding.T, citation_embedding)
+    inheritance_factor = citation_contribution / citation_norm_squared
+    return inheritance_factor.item()  # Convert to scalar
 
-    Returns:
-    w (np.ndarray): Raw weights.
-    w_hat (np.ndarray): Normalized weights.
-    c (np.ndarray): Contribution vector.
-    """
-    p = np.array(p, dtype=np.float64).reshape(-1, 1)
 
-    if v is None or len(v) == 0:
-        return None, p
+def calculate_citation_weights_and_contribution_vector(source_embedding,
+                                                       citation_embeddings):
+    source_embedding = np.array(source_embedding, 
+                                dtype=np.float64).reshape(-1, 1)
+    if citation_embeddings is None or len(citation_embeddings) == 0:
+        return None, source_embedding
+    citation_embeddings = np.array(citation_embeddings, dtype=np.float64)
 
-    v = np.array(v, dtype=np.float64)
+    inheritance_factors = [
+            calculate_inheritance_factor(source_embedding, citation) 
+            for citation in citation_embeddings]
+    total_inheritance = sum(inheritance_factors)
+    weights = [factor / total_inheritance for factor in inheritance_factors]
+
+    # Calculate the aggregated contribution vector
+    aggregated_contribution = np.zeros_like(source_embedding, dtype=np.float64)
+    for i in range(len(citation_embeddings)):
+        aggregated_contribution += citation_embeddings[i]reshape(-1, 
+                                                                  1) * weights[i]
+    contribution_vector = source_embedding - aggregated_contribution
     
-    # Number of parent vectors
-    n = v.shape[0]
-    
-    # Calculate raw weights
-    w = np.zeros(n, dtype=np.float64)
-    for i in range(n):
-        numerator = np.sum(p * v[i].reshape(-1, 1))
-        denominator = np.sum(v[i] ** 2)
-        w[i] = numerator / denominator
-    
-    # Normalize weights
-    w_sum = np.sum(w)
-    w_hat = w / w_sum
-    
-    # Calculate the contribution vector
-    contribution_sum = np.zeros_like(p, dtype=np.float64)
-    for i in range(n):
-        contribution_sum += v[i].reshape(-1, 1) * w_hat[i]
-    
-    # Contribution vector
-    c = p - contribution_sum
-    
-    return w_hat, c
+    return weights, contribution_vector
+
 
 if __name__ == '__main__':
-    # Example usage:
-    p = [1, 2, 3]
-    v = []  # Empty list
-    
-    w_hat, c = calculate_weights(p, v)
-    print("Normalized weights:", w_hat)
-    print("Contribution vector:", c)
+    v1 = [0,1,2,3]
+    v2 = [2,6,4,5]
+    v3 = [20,42,64,1]
+    p = [1,40,20,12]
+    v = [v1, v2, v3]
 
-if __name__ == '__main__':
-    # Example usage:
-    p = [1, 2, 3]
-    v = [
-#        [0.5, 1, 1.5],
-#        [1, 2, 2.5],
-#        [1.5, 2, 2]
-    ]
-    
-    w_hat, c = calculate_weights(p, v)
-    print("Normalized weights:", w_hat)
-    print("Contribution vector:", c)
-    
+    l_weights, _ = calculate_citation_weights_and_contribution_vector(p, v)
+    print(l_weights)
+
+
+
+
 

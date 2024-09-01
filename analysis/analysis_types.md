@@ -7,6 +7,8 @@
 # Science Space
 [ ] Clusterings
 [ ] Regional temporal changes in distribution
+[ ] Fourier analysis of an author's work over time
+[ ] Fourier analysis of a dicipline over time
 
 # Citation tree
 [ ] Work out citation weights and contribution vector (and test)
@@ -23,3 +25,31 @@
 [ ] Look at heredibility of each component (high heredability means value is loyal to parents, if it is low - it means that that value tends to come from the author alone, and not the works it cites)
 [ ] Genetic Specisation
 [ ] Extinsion events?
+
+
+
+# Inherritance weights in adjacency matrix
+[ ] Page rank on inheritance weights adjacacny matix (I think it is a transition matrix)
+[ ] Markov Chain Analysis Stationary Distribution: If you normalize the adjacency matrix such that each row sums to 1 (forming a transition matrix), you can analyze the long-term distribution of inheritance among items using the stationary distribution of the Markov chain. This tells you the proportion of time (or inheritance) each item will accumulate in the long run.  Absorbing States: Identify items that act as absorbing states in the inheritance process, meaning once the inheritance reaches these items, it does not continue to others.
+[ ] Spectral Analysis Eigenvalues and Eigenvectors: Analyze the eigenvalues and eigenvectors of the adjacency matrix to understand the structure and dynamics of the inheritance network. The leading eigenvector can sometimes give insight into the dominant pattern of inheritance flow.  Laplacian Matrix: Construct the graph Laplacian (either the combinatorial or normalized version) to study properties like connectivity, diffusion processes, or to perform spectral clustering.
+[ ] Take different case studies - a mix of important works and decelopments, and of not so much, and do shannon Shannon Entropy of each - Calculate the entropy of the distribution of inheritance across items to measure the uncertainty or diversity of inheritance. Higher entropy indicates a more distributed inheritance, while lower entropy suggests concentrated inheritance.
+[ ] Mutual Information: If you have multiple adjacency matrices (e.g., different time periods or scenarios), mutual information can be used to measure the similarity between inheritance patterns.
+[ ] Hierarchical clustering into a dendrogram
+
+[ ] Visualisation of local distributions (done by tags, or by detecting clusters)
+
+[ ] Comparing arXiv papers embeddings using just titles and summaries, to using the whole paper (or sections) - keep papers used consistant and use different reduction techniques.
+
+
+
+
+
+
+
+
+
+
+
+
+
+

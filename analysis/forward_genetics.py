@@ -1,6 +1,8 @@
 import numpy as np
 from scipy.stats import skew, kurtosis
 
+from citation_weights import get_weights_contribution
+
 class Node:
     def __init__(self, title, embedding, parents=None):
         self.title = title
@@ -20,7 +22,7 @@ class Node:
         if not self.parents:
             return np.array([]), 1.0
         gene_pool = np.array([p.embedding for p in self.parents])
-        return calculate_weights(self.embedding, gene_pool)
+        return get_weights_contribution(self.embedding, gene_pool)
 
     def calculate_cumulative_contribution(self, parent_contribution=1.0):
         self.cumulative_contribution = parent_contribution
@@ -73,39 +75,111 @@ class Node:
         
         return means, stand_dev, skews, kurt_cobains
 
-# Dummy calculate_weights function for illustration
-def calculate_weights(embedding, gene_pool):
-    # This is just a placeholder. Implement your own logic.
-    weights = np.random.rand(len(gene_pool))
-    weights /= weights.sum()
-    return weights, weights.sum()
+from sklearn.decomposition import PCA
 
-# Create the tree and run the analysis
-tree = Node('', [1, 2], [
-    Node('', [1.1, 2.3], [
-        Node('', [2.0, 2.6], []),
-        Node('', [1.0, 2.5], []),
-        Node('', [1.3, 2.4], []),
-        Node('', [0.7, 2.0], []),
-        Node('', [1.5, 1.8], [])
-        ]),
-    Node('', [0.7, 2.1], [
-        Node('', [0.4, 2.0], []),
-        Node('', [0.2, 2.4], []),
-        Node('', [0.8, 2.0], [])
-        ]),
-    Node('', [1.6, 2.0], [
-        Node('', [1.9, 2.1], []),
-        Node('', [1.7, 1.6], []),
-        Node('', [1.5, 2.2], [])
-        ]),
-    Node('', [1.0, 1.6], [
-        Node('', [1.1, 1.4], []),
-        Node('', [0.8, 1.8], []),
-        Node('', [0.6, 1.5], []),
-        Node('', [1.2, 1.7], [])
+# Add this method to your class or call it separately
+def reduce_data_with_pca(data):
+    # Assuming data is a list of arrays where the last element is the cumulative contribution
+    embeddings = np.array([d[:-1] for d in data])
+    contributions = np.array([d[-1] for d in data])
+
+    # Apply PCA to reduce all but the last dimension to 2D
+    pca = PCA(n_components=2)
+    reduced_embeddings = pca.fit_transform(embeddings)
+
+    # Combine the reduced embeddings with the cumulative contribution
+    reduced_data = np.hstack([reduced_embeddings, contributions.reshape(-1, 1)])
+    return reduced_data
+
+
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+
+# Function to plot the 3D network
+def plot_3d_network(nodes, reduced_data):
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+
+    # Extract the x, y, z coordinates from reduced_data
+    x_coords = reduced_data[:, 0]
+    y_coords = reduced_data[:, 1]
+    z_coords = reduced_data[:, 2]
+
+    # Plot all the points (nodes)
+    ax.scatter(x_coords, y_coords, z_coords, c='b', marker='o')
+
+    # Draw lines between parents and children
+    for i, node in enumerate(nodes):
+        for parent in node.parents:
+            parent_index = nodes.index(parent)
+            ax.plot(
+                [x_coords[i], x_coords[parent_index]],
+                [y_coords[i], y_coords[parent_index]],
+                [z_coords[i], z_coords[parent_index]],
+                'k-'
+            )
+
+    ax.set_xlabel('PCA Component 1')
+    ax.set_ylabel('PCA Component 2')
+    ax.set_zlabel('Cumulative Contribution')
+
+    plt.show()
+
+# Function to collect all nodes in a flat list
+def collect_nodes(node):
+    nodes = [node]
+    for parent in node.parents:
+        nodes.extend(collect_nodes(parent))
+    return nodes
+
+if __name__ == '__main__':
+    # Create the tree and run the analysis
+    tree = Node('', [1, 2], [
+        Node('', [1.1, 2.3], [
+            Node('', [2.0, 2.6], []),
+            Node('', [1.0, 2.5], []),
+            Node('', [1.3, 2.4], []),
+            Node('', [0.7, 2.0], []),
+            Node('', [1.5, 1.8], [])
+            ]),
+        Node('', [0.7, 2.1], [
+            Node('', [0.4, 2.0], []),
+            Node('', [0.2, 2.4], []),
+            Node('', [0.8, 2.0], [])
+            ]),
+        Node('', [1.6, 2.0], [
+            Node('', [1.9, 2.1], []),
+            Node('', [1.7, 1.6], []),
+            Node('', [1.5, 2.2], [])
+            ]),
+        Node('', [1.0, 1.6], [
+            Node('', [1.1, 1.4], []),
+            Node('', [0.8, 1.8], []),
+            Node('', [0.6, 1.5], []),
+            Node('', [1.2, 1.7], [])
+            ])
         ])
-    ])
 
-mean, sd, skews, kurt = tree.get_distributions()
-print(f'Means:\n{mean}\nStandard Deviations:\n{sd}\nSkewness:\n{skews}\nKurtosis:\n{kurt}')
+    #mean, sd, skews, kurt = tree.get_distributions()
+    #print(f'Means:\n{mean}\nStandard Deviations:\n{sd}\nSkewness:\n{skews}\nKurtosis:\n{kurt}')
+
+
+    # Get position data
+    data = tree.get_position_data()
+
+    # Flatten the list of lists into a single list of vectors
+    flat_data = [item for sublist in data for item in sublist]
+
+    # Apply PCA reduction
+    reduced_data = reduce_data_with_pca(flat_data)
+
+    # Collect all nodes
+    all_nodes = collect_nodes(tree)
+
+    # Plot the 3D network
+    plot_3d_network(all_nodes, reduced_data)
+    
+
+
+
+
